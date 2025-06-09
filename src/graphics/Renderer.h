@@ -59,6 +59,8 @@ class Renderer : private RendererSettings, public RasterDrawMethods<Renderer>
 	void draw_grav();
 	void draw_other();
 
+	void draw_physics_objects();
+
 	void AdjustHdispLimit();
 
 public:

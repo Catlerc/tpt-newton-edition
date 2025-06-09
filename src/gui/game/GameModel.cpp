@@ -44,6 +44,8 @@
 #include <algorithm>
 #include <optional>
 
+#include "tool/BoxTool.h"
+
 HistoryEntry::~HistoryEntry()
 {
 	// * Needed because Snapshot and SnapshotDelta are incomplete types in GameModel.h,
@@ -1575,6 +1577,7 @@ void GameModel::UpdateUpTo(int upTo)
 	{
 		BeforeSim();
 	}
+	sim->updatePhysicsSim();
 	sim->UpdateParticles(sim->debug_nextToUpdate, upTo);
 	if (upTo < NPART)
 	{
@@ -1785,6 +1788,7 @@ void GameModel::InitTools()
 	AllocTool(std::make_unique<DecorationTool>(view, DECO_DRAW    , "SET" , "Draw decoration (No blending)."                , 0x000000_rgb, "DEFAULT_DECOR_SET" ));
 	AllocTool(std::make_unique<PropertyTool>(*this));
 	AllocTool(std::make_unique<SignTool>(*this));
+	AllocTool(std::make_unique<BoxTool>(*this));
 	AllocTool(std::make_unique<SampleTool>(*this));
 	AllocTool(std::make_unique<GOLTool>(*this));
 	LoadCustomGol();

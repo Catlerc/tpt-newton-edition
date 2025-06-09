@@ -23,6 +23,10 @@ static float remainder_p(float x, float y)
 	return std::fmod(x, y) + (x>=0 ? 0 : y);
 }
 
+void Simulation::updatePhysicsSim() {
+	physicsSimulation.Update(1.0f/60.0f);
+};
+
 void Simulation::Load(const GameSave *save, bool includePressure, Vec2<int> blockP) // block coordinates
 {
 	auto partP = blockP * CELL;
@@ -3823,10 +3827,11 @@ void Simulation::AfterSim()
 
 Simulation::~Simulation() = default;
 
-Simulation::Simulation()
-{
-	std::fill(elementCount, elementCount+PT_NUM, 0);
+Simulation::Simulation() {
+	physicsSimulation.sim = this;
+	std::fill(elementCount, elementCount + PT_NUM, 0);
 	elementRecount = true;
+
 
 	//Create and attach air simulation
 	air = std::make_unique<Air>(*this);

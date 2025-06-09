@@ -485,6 +485,8 @@ if get_option('export_lua_symbols')
 	endif
 endif
 
+box2d_dep = dependency('box2d')
+
 clang_tidy_sources = []
 
 sta_libs = {}
@@ -527,6 +529,7 @@ if get_option('build_powder')
 		lua_dep,
 		curl_dep,
 		fftw_dep,
+		box2d_dep,
 		sta_libs['common'],
 		sta_libs['gui'],
 		sta_libs['simulation'],

@@ -21,6 +21,8 @@
 #include <memory>
 #include <optional>
 
+#include "PhysicsSimulation.h"
+
 constexpr int CHANNELS = int(MAX_TEMP - 73) / 100 + 2;
 
 class Snapshot;
@@ -77,6 +79,8 @@ struct RenderableSimulation
 	int currentTick = 0;
 	int emp_decor = 0;
 
+	PhysicsSimulation physicsSimulation = nullptr;
+
 	playerst player;
 	playerst player2;
 	playerst fighters[MAX_FIGHTERS]; //Defined in Stickman.h
@@ -101,6 +105,7 @@ struct RenderableSimulation
 class Simulation : public RenderableSimulation
 {
 public:
+
 	GravityPtr grav;
 	std::unique_ptr<Air> air;
 
@@ -170,6 +175,8 @@ public:
 	bool move(int i, int x, int y, float nxf, float nyf);
 	int try_move(int i, int x, int y, int nx, int ny);
 	int eval_move(int pt, int nx, int ny, unsigned *rr) const;
+
+	void updatePhysicsSim();
 
 	struct PlanMoveResult
 	{
