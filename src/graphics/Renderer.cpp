@@ -73,7 +73,9 @@ void Renderer::draw_physics_objects() {
             }
             if (f->GetType() == b2Shape::e_polygon ) {
                 b2PolygonShape *poly = static_cast<b2PolygonShape *>(f->GetShape());
-
+                auto color =  RGBA(255, 200, 200, 100);
+                if (body->IsAwake())
+                    color = RGBA(200, 255, 200, 100);
                 for (int32 i = 0; i < poly->m_count; ++i) {
                     const b2Vec2 a = body->GetWorldPoint(poly->m_vertices[i]);
                     const b2Vec2 b = body->GetWorldPoint(poly->m_vertices[(i + 1) % poly->m_count]);
@@ -84,7 +86,7 @@ void Renderer::draw_physics_objects() {
                     BlendLine(
                         pos1,
                         pos2,
-                        RGBA(255, 255, 255, 100)
+                        color
                     );
                 }
             }
@@ -290,6 +292,7 @@ void Renderer::render_parts() {
                     BlendPixel({nx, ny}, 0x646464_rgb .WithAlpha(80));
             }
     }
+
     stats.foundParticles = 0;
     for (i = 0; i <= sim->parts.lastActiveIndex; i++) {
         if (sim->parts[i].type && sim->parts[i].type >= 0 && sim->parts[i].type < PT_NUM) {
