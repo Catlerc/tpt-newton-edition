@@ -263,9 +263,9 @@ public:
 	{
 		return pfree == -1;
 	}
-
-private:
 	CoordStack& getCoordStackSingleton();
+private:
+
 
 	void ResetNewtonianGravity(GravityInput newGravIn, GravityOutput newGravOut);
 	void DispatchNewtonianGravity();

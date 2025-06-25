@@ -9,6 +9,7 @@ static constexpr float PTM = 1.0f / MTP;
 
 struct PhysicsSimulation {
 public:
+    std::vector<b2BodyId> bodyList = std::vector<b2BodyId>();
     Simulation *sim = nullptr;
 
     // // Конструктор по умолчанию
@@ -18,24 +19,33 @@ public:
     // }
 
     // Конструктор, принимающий ссылку на Simulation
-    PhysicsSimulation(Simulation*) // TODO: fix broken constructor.
-        :  world(b2Vec2(0.0f, -10.0f)) {
+    PhysicsSimulation(Simulation *) {
+
         InitializeWorld();
     }
 
+    std::vector<Vec2<int> > *MakeHull(int x, int y);
+
     void Update(float timeStep);
 
-    b2World &GetWorld();
+    b2WorldId &GetWorldId();
 
-    b2Body *GetBodyList() const;
+    const std::vector<b2BodyId> *GetBodyList() const;
 
     void CreateBody(Vec2<int> pos);
 
+    void CreateBodyWithHull(Vec2<int> pos, std::vector<Vec2<int> > points);
+
 private:
-    b2World world;
+    b2WorldId worldId = b2_nullWorldId;
 
     // Инициализация мира
     void InitializeWorld() {
+        b2WorldDef worldDef = b2DefaultWorldDef();
+        worldDef.workerCount = 16;
+        worldDef.userTaskContext = this;
+        worldDef.enableSleep = true;
+        worldId = b2CreateWorld( &worldDef );
         // Параметры зоны
         float offset = 4.0f;
         float left = (0.0f + offset) * PTM;
@@ -44,31 +54,41 @@ private:
         float top = (YRES - 1 - offset) * PTM;
 
         // Создание тела для границ
-        b2BodyDef groundBodyDef;
-        b2Body *groundBody = world.CreateBody(&groundBodyDef);
 
-        // Создание границ в виде EdgeShape
-        b2EdgeShape edge;
+
 
         // Нижняя граница
-        edge.SetTwoSided(b2Vec2(left, bottom), b2Vec2(right, bottom));
-        groundBody->CreateFixture(&edge, 0.0f);
-
-        // Верхняя граница
-        edge.SetTwoSided(b2Vec2(left, top), b2Vec2(right, top));
-        groundBody->CreateFixture(&edge, 0.0f);
-
-        // Левая граница
-        edge.SetTwoSided(b2Vec2(left, bottom), b2Vec2(left, top));
-        groundBody->CreateFixture(&edge, 0.0f);
-
-        // Правая граница
-        edge.SetTwoSided(b2Vec2(right, bottom), b2Vec2(right, top));
-        groundBody->CreateFixture(&edge, 0.0f);
-
-        // создаём динамический ящик (примерно)
-        for (int32 i = 0; i < 10; ++i) {
-            // Логика создания ящиков (если требуется)
+        {
+            b2BodyDef groundBodyDef = b2DefaultBodyDef();
+            b2BodyId groundBody = b2CreateBody(worldId, &groundBodyDef);
+            b2Segment segment = {{left, bottom}, {right, bottom}};
+            b2ShapeDef shapeDef = b2DefaultShapeDef();
+            b2CreateSegmentShape(groundBody, &shapeDef, &segment);
+            bodyList.push_back(groundBody);
+        }
+        {
+            b2BodyDef groundBodyDef = b2DefaultBodyDef();
+            b2BodyId groundBody = b2CreateBody(worldId, &groundBodyDef);
+            b2Segment segment = {{left, top},{right, top}};
+            b2ShapeDef shapeDef = b2DefaultShapeDef();
+            b2CreateSegmentShape(groundBody, &shapeDef, &segment);
+            bodyList.push_back(groundBody);
+        }
+        {
+            b2BodyDef groundBodyDef = b2DefaultBodyDef();
+            b2BodyId groundBody = b2CreateBody(worldId, &groundBodyDef);
+            b2Segment segment = {{left, bottom}, {left, top}};
+            b2ShapeDef shapeDef = b2DefaultShapeDef();
+            b2CreateSegmentShape(groundBody, &shapeDef, &segment);
+            bodyList.push_back(groundBody);
+        }
+        {
+            b2BodyDef groundBodyDef = b2DefaultBodyDef();
+            b2BodyId groundBody = b2CreateBody(worldId, &groundBodyDef);
+            b2Segment segment = {{right, bottom}, {right, top}};
+            b2ShapeDef shapeDef = b2DefaultShapeDef();
+            b2CreateSegmentShape(groundBody, &shapeDef, &segment);
+            bodyList.push_back(groundBody);
         }
     }
 };

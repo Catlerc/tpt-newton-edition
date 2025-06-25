@@ -1,6 +1,7 @@
 #include <box2d/box2d.h>
 #include "PhysicsSimulation.h"
 
+#include <iostream>
 #include <common/RasterGeometry.h>
 #include <common/Vec2.h>
 #include <json/config.h>
@@ -10,6 +11,33 @@
 #include "ElementClasses.h"
 
 
+static int sides[] = {
+    0, 1,
+    1, 0,
+    0, -1,
+    -1, 0
+};
+
+inline Vec2<int> getSide(const int index) {
+    return {sides[index * 2], sides[index * 2 + 1]};
+}
+
+// b2PolygonShape MakePolygonShape(const std::vector<Vec2<int>>& pts) {
+//     if (pts.size() < 3) throw std::runtime_error("Нужно ≥3 точки");
+//
+//     std::vector<b2Vec2> v;
+//     v.reserve(pts.size());
+//     for (auto &p : pts) {
+//         v.emplace_back(static_cast<float>(p.X), static_cast<float>(p.Y));
+//     }
+//
+//     b2Hull hull = b2ComputeHull(v.data(), static_cast<int>(v.size()));
+//     if (hull.count == 0) throw std::runtime_error("Не удалось построить hull");
+//
+//     b2PolygonShape shape;
+//     shape.Set(hull);  // устанавливает форму из hull
+//     return shape;
+// }
 struct GluedParticle {
     int partIndex;
     Vec2<int> offset;
@@ -32,9 +60,9 @@ double float_mod_ring(float x, float n) {
     return std::fmod(std::fmod(x, n) + n, n);
 }
 
-std::vector<GluedParticle> rotateSprite(std::vector<GluedParticle> points, float angle) {
-    auto s = sin(angle);
-    auto c = cos(angle);
+std::vector<GluedParticle> rotateSprite(std::vector<GluedParticle> points, b2Rot rot) {
+    auto s = -rot.s;
+    auto c = rot.c;
 
     auto result = std::vector<GluedParticle>();
 
@@ -75,7 +103,7 @@ std::vector<GluedParticle> rotateSprite(std::vector<GluedParticle> points, float
     for (auto point: points) {
         float x = point.offset.X;
         float y = point.offset.Y;
-        int rx = ceil( x * c - y * s);
+        int rx = ceil(x * c - y * s);
         int ry = ceil(x * s + y * c);
 
         result.push_back({point.partIndex, {rx, ry}});
@@ -84,21 +112,63 @@ std::vector<GluedParticle> rotateSprite(std::vector<GluedParticle> points, float
     return result;
 }
 
-void PhysicsSimulation::Update(float timeStep) {
-    world.Step(timeStep, 6, 2);
 
-    for (auto body = world.GetBodyList(); body; body = body->GetNext()) {
-        auto b2pos = body->GetPosition();
+std::vector<Vec2<int> > *PhysicsSimulation::MakeHull(int x, int y) {
+    auto points = new std::vector<Vec2<int> >();
+
+    char *bitmap = (char *) malloc(XRES * YRES); //Bitmap for checking
+    try {
+        CoordStack &cs = sim->getCoordStackSingleton();
+        cs.clear();
+        cs.push(x, y);
+
+        do {
+            cs.pop(x, y);
+            auto isPoint = false;
+            for (int i = 0; i < 4; i++) {
+                const auto side = getSide(i);
+                const auto newX = x + side.X;
+                const auto newY = y + side.Y;
+                if (newX < 0 || newX >= XRES || newY < 0 || newY >= YRES) {
+                    isPoint = true;
+                    continue;
+                }
+                if (bitmap[newX + newY * XRES] == 0) {
+                    auto part = sim->pmap[newX][newY];
+                    if (part == 0)
+                        isPoint = true;
+                    else {
+                        cs.push(newX, newY);
+                        bitmap[newX + newY * XRES] = 1;
+                    }
+                }
+            }
+            if (isPoint) points->push_back({x, y});
+        } while (cs.getSize() > 0);
+    } catch (std::exception &e) {
+        std::cerr << e.what() << std::endl;
+        free(bitmap);
+        return points;
+    }
+    free(bitmap);
+    return points;
+}
+
+void PhysicsSimulation::Update(float timeStep) {
+    b2World_Step(worldId, 1.0f / 60.0f, 6);
+
+    for (auto body: bodyList) {
+        auto b2pos = b2Body_GetPosition(body);
         auto pos = fromB2Space({b2pos.x, b2pos.y});
-        b2BodyUserData userData = body->GetUserData();
-        if (userData.pointer == 0) {
+        auto userData = b2Body_GetUserData(body);
+        if (userData == nullptr) {
             continue;
         }
 
-        auto angle = -body->GetAngle();
+        auto rot = b2Body_GetRotation(body);
 
 
-        Glue *data = reinterpret_cast<Glue *>(userData.pointer);
+        const auto data = static_cast<Glue *>(userData);
         int minX = 9999;
         int maxX = -9999;
         int minY = 9999;
@@ -145,7 +215,7 @@ void PhysicsSimulation::Update(float timeStep) {
         //                      });
 
         // if (body->IsAwake())
-        for (auto glueParticle: rotateSprite(*data->usedParts, angle)) {
+        for (auto glueParticle: rotateSprite(*data->usedParts, rot)) {
             Particle particle = sim->parts[glueParticle.partIndex];
 
             auto newX = pos.X + glueParticle.offset.X;
@@ -157,34 +227,30 @@ void PhysicsSimulation::Update(float timeStep) {
     }
 }
 
-b2World &PhysicsSimulation::GetWorld() {
-    return world;
+b2WorldId &PhysicsSimulation::GetWorldId() {
+    return worldId;
 }
 
-b2Body *PhysicsSimulation::GetBodyList() const {
-    return const_cast<b2Body *>(world.GetBodyList());
+const std::vector<b2BodyId> *PhysicsSimulation::GetBodyList() const {
+    return &bodyList;
 }
 
 void PhysicsSimulation::CreateBody(Vec2<int> pos) {
-    b2BodyDef boxDef;
+    b2BodyDef boxDef = b2DefaultBodyDef();
 
     boxDef.type = b2_dynamicBody;
-    auto pos2 = toB2Space(pos);
-    boxDef.position.Set(pos2.x, pos2.y);
+    boxDef.position = toB2Space(pos);
 
 
-    b2Body *box = world.CreateBody(&boxDef);
+    b2BodyId bodyId = b2CreateBody(worldId, &boxDef);
+    // b2Body *box = world.CreateBody(&boxDef);
 
 
-    b2PolygonShape boxShape;
-    boxShape.SetAsBox(30.0f * PTM, 30.0f * PTM);
+    b2Polygon boxShape = b2MakeBox(30.0f * PTM, 30.0f * PTM);
+    b2ShapeDef shapeDef = b2DefaultShapeDef();
+    shapeDef.density = 2.0f;
 
-
-    b2FixtureDef fixtureDef;
-    fixtureDef.shape = &boxShape;
-    fixtureDef.density = 1.0f;
-    fixtureDef.friction = 0.3f;
-    box->CreateFixture(&fixtureDef);
+    b2CreatePolygonShape(bodyId, &shapeDef, &boxShape);
 
     // make tpt particles
 
@@ -194,8 +260,7 @@ void PhysicsSimulation::CreateBody(Vec2<int> pos) {
         {0, 0},
     };
 
-    b2AABB aabb;
-    boxShape.ComputeAABB(&aabb, box->GetTransform(), 0);
+    const b2AABB aabb = b2ComputePolygonAABB(&boxShape, b2Body_GetTransform(bodyId));
 
     const auto lowerBound = fromB2Space(aabb.lowerBound);
     glue->lowerLocalBound = {lowerBound.X - pos.X, lowerBound.Y - pos.Y};
@@ -211,6 +276,42 @@ void PhysicsSimulation::CreateBody(Vec2<int> pos) {
             glue->usedParts->push_back(gluedParticle);
         }
     }
+    b2Body_SetUserData(bodyId, glue);
+    bodyList.push_back(bodyId);
+};
 
-    box->GetUserData().pointer = reinterpret_cast<uintptr_t>(glue);
+
+void PhysicsSimulation::CreateBodyWithHull(Vec2<int> pos, std::vector<Vec2<int> > points) {
+    // b2BodyDef boxDef;
+    //
+    // boxDef.type = b2_dynamicBody;
+    // auto pos2 = toB2Space(pos);
+    // boxDef.position.Set(pos2.x, pos2.y);
+    //
+    //
+    // b2Body *box = world.CreateBody(&boxDef);
+    //
+    //
+    // // b2PolygonShape boxShape;
+    // // boxShape.SetAsBox(30.0f * PTM, 30.0f * PTM);
+    // b2Vec2 points[] = {{-1.0f, 0.0f}, {1.0f, 0.0f}, {0.0f, 1.0f}};
+    // auto hull = b2Hull(points, 3);
+    // float radius = 0.1f;
+    // b2Polygon roundedTriangle = b2MakePolygon(&hull, radius);
+    //
+    //
+    // b2FixtureDef fixtureDef;
+    // fixtureDef.shape = &boxShape;
+    // fixtureDef.density = 1.0f;
+    // fixtureDef.friction = 0.3f;
+    // box->CreateFixture(&fixtureDef);
+    //
+    // // make tpt particles
+    //
+    // Glue *glue = new Glue{
+    //     new std::vector<GluedParticle>(),
+    //     {0, 0},
+    //     {0, 0},
+    // };
+    // box->GetUserData().pointer = reinterpret_cast<uintptr_t>(glue);
 };

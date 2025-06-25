@@ -45,6 +45,7 @@
 #include <optional>
 
 #include "tool/BoxTool.h"
+#include "tool/GlueTool.h"
 
 HistoryEntry::~HistoryEntry()
 {
@@ -1789,6 +1790,7 @@ void GameModel::InitTools()
 	AllocTool(std::make_unique<PropertyTool>(*this));
 	AllocTool(std::make_unique<SignTool>(*this));
 	AllocTool(std::make_unique<BoxTool>(*this));
+	AllocTool(std::make_unique<GlueTool>(*this));
 	AllocTool(std::make_unique<SampleTool>(*this));
 	AllocTool(std::make_unique<GOLTool>(*this));
 	LoadCustomGol();

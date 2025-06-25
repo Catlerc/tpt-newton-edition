@@ -6,6 +6,7 @@ powder_files += files(
 	'SampleTool.cpp',
 	'SignTool.cpp',
 	'BoxTool.cpp',
+	'GlueTool.cpp',
 	'Tool.cpp',
 	'WallTool.cpp',
 )

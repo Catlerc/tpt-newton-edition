@@ -14,7 +14,6 @@
 #include "simulation/orbitalparts.h"
 #include <cmath>
 #include <algorithm>
-#include <b2_body.h>
 
 
 void Renderer::RenderBackground() {
@@ -56,12 +55,17 @@ void Renderer::ApproximateAccumulation() {
 
 void Renderer::draw_physics_objects() {
     auto &physSim = sim->physicsSimulation;
-    for (b2Body *body = physSim.GetBodyList(); body; body = body->GetNext()) {
-        for (b2Fixture *f = body->GetFixtureList(); f; f = f->GetNext()) {
-            if (f->GetType() == b2Shape::e_edge) {
-                b2EdgeShape *edge = static_cast<b2EdgeShape *>(f->GetShape());
-                const b2Vec2 a = body->GetWorldPoint(edge->m_vertex1);
-                const b2Vec2 b = body->GetWorldPoint(edge->m_vertex2);
+    for (auto bodyId : physSim.bodyList) {
+        b2ShapeId* shapes = new b2ShapeId[b2Body_GetShapeCount(bodyId)];
+        b2Body_GetShapes(bodyId, shapes, b2Body_GetShapeCount(bodyId));
+        for (int i = 0; i < b2Body_GetShapeCount(bodyId); i++) {
+            //box2d v3.1.1
+            auto shapeId = shapes[i];
+            auto type = b2Shape_GetType(shapeId);
+            if (type == b2_segmentShape) {
+                auto segment = b2Shape_GetSegment(shapeId);
+                const b2Vec2 a = segment.point1;
+                const b2Vec2 b = segment.point2;
                 // замыкание в кольцо
                 const Vec2<int> pos1 = fromB2Space(a);
                 const Vec2<int> pos2 = fromB2Space(b);
@@ -71,18 +75,21 @@ void Renderer::draw_physics_objects() {
                     RGB(255, 100, 100)
                 );
             }
-            if (f->GetType() == b2Shape::e_polygon ) {
-                b2PolygonShape *poly = static_cast<b2PolygonShape *>(f->GetShape());
+            if (type == b2_polygonShape) {
+                auto rot = b2Body_GetRotation(bodyId);
                 auto color =  RGBA(255, 200, 200, 100);
-                if (body->IsAwake())
+                if (b2Body_IsAwake(bodyId))
                     color = RGBA(200, 255, 200, 100);
-                for (int32 i = 0; i < poly->m_count; ++i) {
-                    const b2Vec2 a = body->GetWorldPoint(poly->m_vertices[i]);
-                    const b2Vec2 b = body->GetWorldPoint(poly->m_vertices[(i + 1) % poly->m_count]);
-                    // замыкание в кольцо
-                    const Vec2<int> pos1 = fromB2Space(a);// {static_cast<int>(a.x * MTP), YRES - static_cast<int>(a.y * MTP) - 1};
-                    const Vec2<int> pos2 = fromB2Space(b);//{static_cast<int>(b.x * MTP), YRES - static_cast<int>(b.y * MTP) - 1};
+                auto polygon = b2Shape_GetPolygon(shapeId);
+                for (auto i = 0; i < polygon.count; i++) {
+                    auto pos = b2Body_GetPosition(bodyId);
+                    b2Vec2 a = b2RotateVector(rot, polygon.vertices[i]) + pos;
+                    b2Vec2 b = b2RotateVector(rot, polygon.vertices[(i + 1) % polygon.count] )+ pos;
 
+
+                    // замыкание в кольцо
+                    const Vec2<int> pos1 = fromB2Space(a);
+                    const Vec2<int> pos2 = fromB2Space(b);
                     BlendLine(
                         pos1,
                         pos2,
@@ -91,6 +98,27 @@ void Renderer::draw_physics_objects() {
                 }
             }
         }
+
+        //     if (f->GetType() == b2Shape::e_polygon ) {
+        //         b2PolygonShape *poly = static_cast<b2PolygonShape *>(f->GetShape());
+        //         auto color =  RGBA(255, 200, 200, 100);
+        //         if (body->IsAwake())
+        //             color = RGBA(200, 255, 200, 100);
+        //         for (int32 i = 0; i < poly->m_count; ++i) {
+        //             const b2Vec2 a = body->GetWorldPoint(poly->m_vertices[i]);
+        //             const b2Vec2 b = body->GetWorldPoint(poly->m_vertices[(i + 1) % poly->m_count]);
+        //             // замыкание в кольцо
+        //             const Vec2<int> pos1 = fromB2Space(a);// {static_cast<int>(a.x * MTP), YRES - static_cast<int>(a.y * MTP) - 1};
+        //             const Vec2<int> pos2 = fromB2Space(b);//{static_cast<int>(b.x * MTP), YRES - static_cast<int>(b.y * MTP) - 1};
+        //
+        //             BlendLine(
+        //                 pos1,
+        //                 pos2,
+        //                 color
+        //             );
+        //         }
+        //     }
+        // }
     }
 }
 
